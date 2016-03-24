@@ -35,7 +35,6 @@ class ThrottledSocket(object):
             self._last_time = current_time
             
             self._debt = max(self._debt-time_delta*self._rate_limit, 0)
-            print "Current debt: " + str(self._debt) + ", Sleeping for " + str(self._debt / self._rate_limit) + " seconds"
             
             if self._debt == 0:
                 nbytes = self._sock.sendto(string, *args, **kwargs)
