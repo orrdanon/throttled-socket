@@ -43,8 +43,9 @@ class ThrottledSocket(object):
             else:
                 sleep_period = self._debt/self._rate_limit
                 
-                if sleep_period > self._sock.gettimeout():
-                    raise socket.timeout("sendto will reach timeout")
+                if self._sock.gettimeout() is not None:
+                    if sleep_period > self._sock.gettimeout():
+                        raise socket.timeout("sendto will reach timeout")
                 
                 time.sleep(sleep_period)
                 return self.sendto(string, *args, **kwargs)
@@ -59,6 +60,7 @@ if __name__ == "__main__":
 
     for j in xrange(100):
         s1.sendto("1"*random.randint(1, 1024), ("127.0.0.1", 11111))
+        print "sent"
         time.sleep(random.random()/20)
         s2.recv(1024)
     
