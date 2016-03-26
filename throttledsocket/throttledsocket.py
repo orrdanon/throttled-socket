@@ -29,26 +29,28 @@ class ThrottledSocket(object):
     
     
     def sendto(self, string, *args, **kwargs):
-        if self._rate_limit:
-            current_time = time.time()
-            time_delta = current_time - self._last_time
-            self._last_time = current_time
+        if not self._rate_limit:
+            return self._sock.sendto(string, *args, **kwargs)
+        
+        current_time = time.time()
+        time_delta = current_time - self._last_time
+        self._last_time = current_time
+        
+        self._debt = max(self._debt-time_delta*self._rate_limit, 0)
+        
+        if self._debt == 0:
+            nbytes = self._sock.sendto(string, *args, **kwargs)
+            self._debt += nbytes
+            return nbytes
+        else:
+            sleep_period = self._debt/self._rate_limit
             
-            self._debt = max(self._debt-time_delta*self._rate_limit, 0)
+            if self._sock.gettimeout() is not None:
+                if sleep_period > self._sock.gettimeout():
+                    raise socket.timeout("sendto will reach timeout")
             
-            if self._debt == 0:
-                nbytes = self._sock.sendto(string, *args, **kwargs)
-                self._debt += nbytes
-                return nbytes
-            else:
-                sleep_period = self._debt/self._rate_limit
-                
-                if self._sock.gettimeout() is not None:
-                    if sleep_period > self._sock.gettimeout():
-                        raise socket.timeout("sendto will reach timeout")
-                
-                time.sleep(sleep_period)
-                return self.sendto(string, *args, **kwargs)
+            time.sleep(sleep_period)
+            return self.sendto(string, *args, **kwargs)
         
 
 if __name__ == "__main__":
