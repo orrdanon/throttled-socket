@@ -20,16 +20,19 @@ def rate_limit_send(sender_func):
         current_time = time.time()
         time_delta = current_time - self._last_time
         self._last_time = current_time
-        self._debt = max(self._debt-time_delta*self._rate_limit, 0)
+        self._debt = max(self._debt - time_delta*self._rate_limit, 0)
         
         if self._debt == 0:
             nbytes = sender_func(self, string, *args, **kwargs)
+            if nbytes is None:
+                # This is the case for the sendall function
+                nbytes = len(string)
             # TODO: take into account header size
-            self._debt += nbytes + 66
+            self._debt += nbytes
             return nbytes
         else:
-            sleep_period = self._debt/self._rate_limit
-            print "debt", self._debt, "sleep", sleep_period
+            sleep_period = self._debt / self._rate_limit
+            print "debt:", self._debt, "sleep:", sleep_period
             
             if self._sock.gettimeout() is not None:
                 if sleep_period > self._sock.gettimeout():
@@ -67,11 +70,14 @@ class ThrottledSocket(object):
     def send(self, *args, **kwargs):
         return self._sock.send(*args, **kwargs)
     
+    @rate_limit_send
+    def sendall(self, *args, **kwargs):
+        return self._sock.sendall(*args, **kwargs)
     
 if __name__ == "__main__":
     SOCK_FAMILY = socket.AF_INET
     SOCK_PROTO = socket.SOCK_STREAM
-    SOCK_RCV_PORT = 11114
+    SOCK_RCV_PORT = 11111
     
     def read_from_socket(lock1, lock2):
         s = ThrottledSocket(SOCK_FAMILY, SOCK_PROTO)
@@ -103,10 +109,10 @@ if __name__ == "__main__":
     lock2 = threading.Lock()
     lock2.acquire()
     
-    receiver = threading.Thread(target = read_from_socket, args = (lock1, lock2))
+    receiver = threading.Thread(target=read_from_socket, args=(lock1, lock2))
     receiver.start()
     
-    s = ThrottledSocket(SOCK_FAMILY, SOCK_PROTO, rate_limit = 10000)
+    s = ThrottledSocket(SOCK_FAMILY, SOCK_PROTO, rate_limit=10000)
     s.settimeout(0.1)
     
     if SOCK_PROTO == socket.SOCK_DGRAM:
@@ -117,7 +123,8 @@ if __name__ == "__main__":
 
     for j in xrange(1000):
         try:
-            nsent = s.sendto("1"*random.randint(1, 1024), ("127.0.0.1", SOCK_RCV_PORT))
+            #nsent = s.sendto("1"*random.randint(1, 1024), ("127.0.0.1", SOCK_RCV_PORT))
+            nsent = s.sendall("1"*random.randint(1, 1024))
             print "sent", nsent, "bytes"
         except socket.timeout as e:
             print "Error in send:", e
